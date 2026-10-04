@@ -6,15 +6,16 @@ struct ContentView: View {
     static let enclaveKit = EnclaveKitClient(config: EnclaveKitConfig(
         relayerURL: URL(string: "http://NicolasnoMacBook-Pro.local:8080")!
     ))
-    static let lamports: UInt64 = 10_000_000
+    static let amount: Lamports = 10_000_000
 
     @State private var wallet: Wallet?
     @State private var balance: Lamports?
     /// The CLI wallet that funds the vault: the SOL goes back home.
     @State private var destination = "BvNwpwwQmEZyJdGwT6kpHXKTqHzBUteh9qfhQ7AnGNqE"
-    @State private var sending = false
+    @State private var busy = false
     @State private var status = ""
-    @State private var signature: String?
+    @State private var request: ActionRequest?
+    @State private var receipt: Receipt?
 
     var body: some View {
         Form {
@@ -27,19 +28,27 @@ struct ContentView: View {
                     LabeledContent("Balance", value: balance?.formatted ?? "…")
                     Button("Refresh") { Task { await refresh() } }
                 }
-                Section("Send 0.01 SOL") {
+                Section("Send \(Self.amount.formatted)") {
                     TextField("Recipient", text: $destination)
                         .font(.footnote.monospaced())
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
-                    Button("Send") { Task { await send() } }
-                        .disabled(sending)
+                    Button("Review") { Task { await review(wallet) } }
+                        .disabled(busy)
+                }
+            }
+            if let request {
+                Section("Review") {
+                    Text(request.summary)
+                    LabeledContent("Fee up to", value: request.maxFee.formatted)
+                    Button("Authorize with Face ID") { Task { await authorize(request) } }
+                        .disabled(busy)
                 }
             }
             Section {
                 Text(status)
-                if let signature, let url = URL(string: "https://explorer.solana.com/tx/\(signature)?cluster=devnet") {
-                    Link("View in Explorer", destination: url)
+                if let receipt {
+                    Link("View in Explorer", destination: receipt.explorerURL)
                 }
             }
         }
@@ -65,15 +74,27 @@ struct ContentView: View {
         }
     }
 
-    private func send() async {
-        guard let wallet else { return }
-        sending = true
-        defer { sending = false }
+    /// Reads the wallet and checks the vault can pay: no Face ID yet.
+    private func review(_ wallet: Wallet) async {
+        busy = true
+        defer { busy = false }
         do {
-            let to = try PublicKey(base58: destination)
+            receipt = nil
+            status = ""
+            request = try await wallet.prepareTransfer(Self.amount, to: try PublicKey(base58: destination))
+        } catch {
+            request = nil
+            status = "\(error)"
+        }
+    }
+
+    private func authorize(_ request: ActionRequest) async {
+        busy = true
+        defer { busy = false }
+        do {
             status = "Sending…"
-            signature = nil
-            signature = try await wallet.send(.transferSol(to: to, lamports: Self.lamports))
+            receipt = try await request.authorize()
+            self.request = nil
             status = "Confirmed"
             await refresh()
         } catch {
