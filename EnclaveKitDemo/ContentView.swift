@@ -1,5 +1,4 @@
 import EnclaveKit
-import EnclaveKitCore
 import SwiftUI
 
 struct ContentView: View {
