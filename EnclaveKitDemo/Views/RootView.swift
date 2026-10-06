@@ -12,6 +12,9 @@ import SwiftUI
 enum Screen: Hashable {
     case send
     case guardians
+    case guarding
+    case guardedWallet(Wallet.ID)
+    case recover
 }
 
 /// The enroll screen until the wallet exists, then the wallet, the screens
@@ -30,8 +33,11 @@ struct RootView: View {
                     balance: model.balance,
                     status: model.status,
                     guardians: model.guardians?.count,
+                    guarding: model.guarded.count,
                     refresh: model.refresh,
-                    cancelRecovery: model.reviewCancelRecovery
+                    cancelRecovery: model.reviewCancelRecovery,
+                    confirmRecovery: model.confirmRecovery,
+                    deleteDeviceKey: model.deleteDeviceKey
                 )
                 .navigationDestination(for: Screen.self) { screen in
                     switch screen {
@@ -46,12 +52,36 @@ struct RootView: View {
                             refresh: model.refresh,
                             review: model.reviewGuardians
                         )
+                    case .guarding:
+                        GuardedWalletsView(
+                            rows: model.guarded.map { .init(id: $0.id, address: $0.address, status: model.guardedStatuses[$0.id]) },
+                            walletID: wallet.id,
+                            deviceKey: wallet.deviceKey,
+                            refresh: model.refresh,
+                            keep: model.guardWallet
+                        )
+                    case let .guardedWallet(id):
+                        if let guarded = model.guarded.first(where: { $0.id == id }) {
+                            GuardedWalletView(
+                                id: id,
+                                address: guarded.address,
+                                explorerURL: guarded.explorerURL,
+                                status: model.guardedStatuses[id],
+                                deviceKey: wallet.deviceKey,
+                                refresh: model.refresh,
+                                review: { await model.reviewRecovery(of: id, to: $0) }
+                            )
+                        }
+                    case .recover:
+                        RecoverView(deviceKey: wallet.deviceKey, walletID: wallet.id, recover: model.recoverWallet)
                     }
                 }
             } else {
                 EnrollView(create: model.createWallet)
             }
         }
+        // Another wallet, or none: the screens pushed over the last one go.
+        .onChange(of: model.wallet?.id) { path.removeAll() }
         .sheet(item: $model.consent) { consent in
             ConsentSheet(
                 summary: consent.request.summary,
@@ -61,8 +91,9 @@ struct RootView: View {
                 close: { model.consent = nil },
                 done: {
                     model.consent = nil
-                    // Back to the wallet after a send; the other actions
-                    // stay on their screen, refreshed.
+                    // Back to the wallet after a send; the other actions,
+                    // a guardian's proposal included, stay on their
+                    // screen, refreshed.
                     path.removeAll { $0 == .send }
                 }
             )

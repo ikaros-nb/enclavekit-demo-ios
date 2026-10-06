@@ -15,7 +15,7 @@ struct EnrollView: View {
         ContentUnavailableView {
             Label("No wallet yet", systemImage: "lock.shield")
         } description: {
-            Text("Its key is made inside this iPhone's Secure Enclave and never leaves it. Face ID approves every send.")
+            Text("Its key is made inside this iPhone's Secure Enclave and never leaves it. Face ID approves every send.\n\nReplacing a lost iPhone? Create one all the same: a guardian moves the lost wallet to its key.")
         } actions: {
             Button("Create wallet") { Task { await create() } }
                 .buttonStyle(.borderedProminent)
