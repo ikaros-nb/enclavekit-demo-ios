@@ -62,6 +62,7 @@ struct WalletView: View {
         case .active(_, recovery: .some): "Recovery in progress"
         case .active(attested: false, recovery: nil): "Active"
         case .active(attested: true, recovery: nil): "Active, attested"
+        case .recovering: "Moving to this device"
         case .keyReplaced: "Moved to another key"
         }
     }
