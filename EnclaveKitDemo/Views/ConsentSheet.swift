@@ -34,7 +34,9 @@ struct ConsentSheet: View {
                 Section {
                     switch phase {
                     case .review:
-                        Button("Authorize with Face ID", systemImage: "faceid") {
+                        // Face ID, Touch ID or the passcode: whatever this
+                        // iPhone unlocks with.
+                        Button("Authorize", systemImage: "signature") {
                             Task { await authorize() }
                         }
                     case .authorizing:

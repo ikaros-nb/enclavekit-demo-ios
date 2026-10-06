@@ -33,7 +33,7 @@ struct RecoverView: View {
             } header: {
                 Text("1. Show this key to a guardian")
             } footer: {
-                Text("A guardian of the lost wallet scans it, then proposes it with one Face ID.")
+                Text("A guardian of the lost wallet scans it, then approves the proposal on their iPhone.")
             }
 
             Section {

@@ -53,7 +53,7 @@ struct WalletView: View {
                 } header: {
                     Label("Recovery to this iPhone", systemImage: "arrow.triangle.2.circlepath")
                 } footer: {
-                    Text("A guardian proposed this iPhone's key. Once the delay is over, confirm: the wallet's key becomes this iPhone's. No Face ID, the relayer pays the fee. Until then, the old iPhone can still cancel.")
+                    Text("A guardian proposed this iPhone's key. Once the delay is over, confirm: the wallet's key becomes this iPhone's. Nothing to approve, the relayer pays the fee. Until then, the old iPhone can still cancel.")
                 }
             }
 
