@@ -59,8 +59,9 @@ struct WalletView: View {
         guard let status else { return "…" }
         return switch status {
         case .notOnChainYet: "Not on-chain yet"
-        case .active(attested: false): "Active"
-        case .active(attested: true): "Active, attested"
+        case .active(_, recovery: .some): "Recovery in progress"
+        case .active(attested: false, recovery: nil): "Active"
+        case .active(attested: true, recovery: nil): "Active, attested"
         case .keyReplaced: "Moved to another key"
         }
     }
