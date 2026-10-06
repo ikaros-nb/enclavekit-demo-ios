@@ -290,6 +290,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EnclaveKitDemo/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "The camera scans the QR codes other devices show: a guardian's key, a wallet to guard or recover.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID will authorize each wallet action.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Reach the Kora relayer on the Mac during development.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
@@ -331,6 +332,7 @@
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = EnclaveKitDemo/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "The camera scans the QR codes other devices show: a guardian's key, a wallet to guard or recover.";
 				INFOPLIST_KEY_NSFaceIDUsageDescription = "Face ID will authorize each wallet action.";
 				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "Reach the Kora relayer on the Mac during development.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;

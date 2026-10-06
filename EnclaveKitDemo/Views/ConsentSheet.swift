@@ -28,7 +28,7 @@ struct ConsentSheet: View {
                         .typesettingLanguage(.address)
                     LabeledContent("Fee up to", value: maxFee.formatted)
                 } footer: {
-                    Text("Paid back to the relayer that sends the transaction. The first send also pays the rent of the wallet's account.")
+                    Text("Paid back to the relayer that sends the transaction. The wallet's first action also pays the rent of its account.")
                 }
 
                 Section {

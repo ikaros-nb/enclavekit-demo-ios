@@ -18,6 +18,8 @@ import Observation
     private(set) var wallet: Wallet?
     private(set) var balance: Lamports?
     private(set) var status: Wallet.Status?
+    /// None before the first action.
+    private(set) var guardians: [DeviceKey]?
     /// The action in the consent sheet, from review to receipt.
     var consent: Consent?
     /// What went wrong outside the consent sheet, shown in an alert.
@@ -52,16 +54,30 @@ import Observation
         do {
             balance = try await wallet.balance()
             status = try await wallet.status()
+            guardians = try await wallet.guardians()
         } catch {
             failure = error.localizedDescription
         }
     }
 
+    func reviewTransfer(_ amount: Lamports, to recipient: PublicKey) async {
+        await review { try await $0.prepareTransfer(amount, to: recipient) }
+    }
+
+    /// The whole list, as it would be.
+    func reviewGuardians(_ guardians: [DeviceKey]) async {
+        await review { try await $0.prepareSetGuardians(guardians) }
+    }
+
+    func reviewCancelRecovery() async {
+        await review { try await $0.prepareCancelRecovery() }
+    }
+
     /// Checks the vault can pay, then opens the consent sheet. No Face ID yet.
-    func review(_ amount: Lamports, to recipient: PublicKey) async {
+    private func review(_ prepare: (Wallet) async throws -> ActionRequest) async {
         guard let wallet else { return }
         do {
-            consent = Consent(request: try await wallet.prepareTransfer(amount, to: recipient))
+            consent = Consent(request: try await prepare(wallet))
         } catch {
             failure = error.localizedDescription
         }
