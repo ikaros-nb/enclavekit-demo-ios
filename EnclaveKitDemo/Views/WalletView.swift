@@ -11,7 +11,8 @@ import SwiftUI
 /// The vault: where to send SOL, what it holds, the way to the send and
 /// guardians screens, then what this iPhone does for other wallets. A
 /// recovery comes first: to cancel on the owner's iPhone, to confirm on the
-/// new one. Pull down to refresh.
+/// new one. Then a wallet without a guardian says so, on top. Pull down to
+/// refresh.
 struct WalletView: View {
     let address: PublicKey
     let explorerURL: URL
@@ -90,6 +91,25 @@ struct WalletView: View {
                 }
             }
 
+            if canSign && guardians == 0 {
+                Section {
+                    NavigationLink(value: Screen.guardians) {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("No guardian")
+                                    .font(.headline)
+                                Text("Losing this iPhone loses the wallet. Add a second iPhone or iPad.")
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                        }
+                    }
+                }
+            }
+
             Section {
                 Text(address.base58)
                     .font(.footnote.monospaced())
@@ -131,10 +151,6 @@ struct WalletView: View {
                         } label: {
                             Label("Guardians", systemImage: "person.2")
                         }
-                    }
-                } footer: {
-                    if guardians == 0 {
-                        Text("Without a guardian, losing this iPhone loses the wallet.")
                     }
                 }
             }

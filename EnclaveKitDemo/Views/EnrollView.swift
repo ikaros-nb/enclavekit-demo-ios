@@ -7,7 +7,8 @@
 
 import SwiftUI
 
-/// First launch: this device has no key yet.
+/// First launch: this device has no key yet. A new wallet has no guardian:
+/// the risk is said before the key exists.
 struct EnrollView: View {
     let create: () async -> Void
 
@@ -15,7 +16,12 @@ struct EnrollView: View {
         ContentUnavailableView {
             Label("No wallet yet", systemImage: "lock.shield")
         } description: {
-            Text("Its key is made inside this iPhone's Secure Enclave and never leaves it. You approve every action as you unlock this iPhone.\n\nReplacing a lost iPhone? Create one all the same: a guardian moves the lost wallet to its key.")
+            VStack(spacing: 16) {
+                Text("Its key is made inside this iPhone's Secure Enclave and never leaves it. You approve every action as you unlock this iPhone.")
+                Text("\(Text(Image(systemName: "exclamationmark.triangle.fill")).foregroundStyle(.orange)) Without a second Apple device as guardian, a lost iPhone is a lost wallet. Add one once the wallet exists.")
+                    .foregroundStyle(.primary)
+                Text("Replacing a lost iPhone? Create one all the same: a guardian moves the lost wallet to its key.")
+            }
         } actions: {
             Button("Create wallet") { Task { await create() } }
                 .buttonStyle(.borderedProminent)
