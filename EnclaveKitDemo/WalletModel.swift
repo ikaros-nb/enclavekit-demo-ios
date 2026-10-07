@@ -111,9 +111,42 @@ import Observation
         await refresh()
     }
 
+    /// Takes the wallet off this device's list: the Keychain only. The
+    /// wallet still names this device until its owner changes its guardians.
+    func forgetWallet(_ id: Wallet.ID) {
+        do {
+            try client.forgetWallet(id)
+            guarded = try client.guardedWallets()
+            guardedStatuses[id] = nil
+        } catch {
+            failure = error.localizedDescription
+        }
+    }
+
     func reviewTransfer(_ amount: Lamports, to recipient: PublicKey) async {
         guard let wallet else { return }
         await review { try await wallet.prepareTransfer(amount, to: recipient) }
+    }
+
+    /// Everything the vault holds, the fee aside: the program reads the
+    /// amount as it executes.
+    func reviewTransferAll(to recipient: PublicKey) async {
+        guard let wallet else { return }
+        await review { try await wallet.prepareTransferAll(to: recipient) }
+    }
+
+    /// Everything to `destination`, then the key goes once confirmed. A
+    /// wallet that never acted and holds less than the fee has nothing to
+    /// send: only the key goes, at once.
+    func reviewClose(to destination: PublicKey) async {
+        guard let wallet else { return }
+        do {
+            consent = Consent(request: try await wallet.prepareClose(to: destination), closesWallet: true)
+        } catch EnclaveKitError.nothingToClose {
+            deleteDeviceKey()
+        } catch {
+            failure = error.localizedDescription
+        }
     }
 
     /// The whole list, as it would be.
@@ -162,13 +195,21 @@ import Observation
         do {
             let receipt = try await request.authorize()
             consent?.phase = .confirmed(explorerURL: receipt.explorerURL)
-            await refresh()
+            // A closed wallet took the key along: nothing left to read.
+            if consent?.closesWallet != true { await refresh() }
         } catch EnclaveKitError.cancelled {
             consent?.phase = .review
         } catch {
             let explorerURL = (error as? EnclaveKitError)?.receipt?.explorerURL
             consent?.phase = .failed(message: error.localizedDescription, explorerURL: explorerURL)
         }
+    }
+
+    /// Done, once confirmed. A closed wallet took the key along: back to the
+    /// enroll screen.
+    func dismissConfirmed() {
+        if consent?.closesWallet == true { show(nil) }
+        consent = nil
     }
 }
 
@@ -184,6 +225,8 @@ struct Consent: Identifiable {
     }
 
     let request: ActionRequest
+    /// Confirmed, it deleted the key: Done goes back to the enroll screen.
+    var closesWallet = false
     var phase = Phase.review
 
     var id: UUID { request.id }

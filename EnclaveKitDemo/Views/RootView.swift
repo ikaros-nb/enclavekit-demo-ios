@@ -15,6 +15,7 @@ enum Screen: Hashable {
     case guarding
     case guardedWallet(Wallet.ID)
     case recover
+    case close
 }
 
 /// The enroll screen until the wallet exists, then the wallet, the screens
@@ -42,7 +43,12 @@ struct RootView: View {
                 .navigationDestination(for: Screen.self) { screen in
                     switch screen {
                     case .send:
-                        SendView(recipient: DemoConfig.recipient, amount: DemoConfig.amount, review: model.reviewTransfer)
+                        SendView(
+                            recipient: DemoConfig.recipient,
+                            amount: DemoConfig.amount,
+                            review: model.reviewTransfer,
+                            reviewAll: model.reviewTransferAll
+                        )
                     case .guardians:
                         GuardiansView(
                             walletID: wallet.id,
@@ -69,11 +75,17 @@ struct RootView: View {
                                 status: model.guardedStatuses[id],
                                 deviceKey: wallet.deviceKey,
                                 refresh: model.refresh,
-                                review: { await model.reviewRecovery(of: id, to: $0) }
+                                review: { await model.reviewRecovery(of: id, to: $0) },
+                                forget: {
+                                    path.removeAll { $0 == .guardedWallet(id) }
+                                    model.forgetWallet(id)
+                                }
                             )
                         }
                     case .recover:
                         RecoverView(deviceKey: wallet.deviceKey, walletID: wallet.id, recover: model.recoverWallet)
+                    case .close:
+                        CloseView(destination: DemoConfig.recipient, guarding: model.guarded.count, review: model.reviewClose)
                     }
                 }
             } else {
@@ -90,10 +102,10 @@ struct RootView: View {
                 authorize: model.authorize,
                 close: { model.consent = nil },
                 done: {
-                    model.consent = nil
-                    // Back to the wallet after a send; the other actions,
-                    // a guardian's proposal included, stay on their
-                    // screen, refreshed.
+                    model.dismissConfirmed()
+                    // Back to the wallet after a send, to the enroll screen
+                    // after a close; the other actions, a guardian's
+                    // proposal included, stay on their screen, refreshed.
                     path.removeAll { $0 == .send }
                 }
             )

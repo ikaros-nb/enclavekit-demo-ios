@@ -9,10 +9,10 @@ import EnclaveKit
 import SwiftUI
 
 /// The vault: where to send SOL, what it holds, the way to the send and
-/// guardians screens, then what this iPhone does for other wallets. A
-/// recovery comes first: to cancel on the owner's iPhone, to confirm on the
-/// new one. Then a wallet without a guardian says so, on top. Pull down to
-/// refresh.
+/// guardians screens, then what this iPhone does for other wallets and how
+/// it starts over. A recovery comes first: to cancel on the owner's iPhone,
+/// to confirm on the new one. Then a wallet without a guardian says so, on
+/// top. Pull down to refresh.
 struct WalletView: View {
     let address: PublicKey
     let explorerURL: URL
@@ -168,6 +168,11 @@ struct WalletView: View {
                         Label("Recover a wallet", systemImage: "lifepreserver")
                     }
                 }
+                if canSign {
+                    NavigationLink(value: Screen.close) {
+                        Label("Close wallet", systemImage: "xmark.bin")
+                    }
+                }
                 Button(role: .destructive) {
                     confirmingDeletion = true
                 } label: {
@@ -177,7 +182,7 @@ struct WalletView: View {
             } header: {
                 Text("This iPhone")
             } footer: {
-                Text("Deleting the key is how the demo loses this iPhone.")
+                Text(canSign ? "Closing the wallet is how the demo starts over; deleting the key, how it loses this iPhone." : "Deleting the key is how the demo loses this iPhone.")
             }
         }
         .navigationTitle("Wallet")

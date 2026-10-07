@@ -8,18 +8,29 @@
 import EnclaveKit
 import SwiftUI
 
-/// Who and how much. Review stays off until both read as valid: the SDK
-/// then checks the vault can pay, before any Face ID.
+/// Who and how much, or everything. Review stays off until both read as
+/// valid: the SDK then checks the vault can pay, before any Face ID.
 struct SendView: View {
     let review: (Lamports, PublicKey) async -> Void
+    /// The whole balance: no amount to type.
+    let reviewAll: (PublicKey) async -> Void
     @State private var recipient: String
     @State private var amount: String
+    @State private var sendsAll: Bool
     @State private var reviewing = false
 
-    init(recipient: String = "", amount: String = "", review: @escaping (Lamports, PublicKey) async -> Void) {
+    init(
+        recipient: String = "",
+        amount: String = "",
+        sendsAll: Bool = false,
+        review: @escaping (Lamports, PublicKey) async -> Void,
+        reviewAll: @escaping (PublicKey) async -> Void
+    ) {
         self.review = review
+        self.reviewAll = reviewAll
         _recipient = State(initialValue: recipient)
         _amount = State(initialValue: amount)
+        _sendsAll = State(initialValue: sendsAll)
     }
 
     var body: some View {
@@ -39,21 +50,34 @@ struct SendView: View {
                 }
             }
 
-            Section("Amount") {
-                HStack {
-                    TextField("0.01", text: $amount)
-                        .keyboardType(.decimalPad)
-                    Text("SOL")
-                        .foregroundStyle(.secondary)
+            Section {
+                Toggle("Send all", isOn: $sendsAll)
+                if !sendsAll {
+                    HStack {
+                        TextField("0.01", text: $amount)
+                            .keyboardType(.decimalPad)
+                        Text("SOL")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } header: {
+                Text("Amount")
+            } footer: {
+                if sendsAll {
+                    Text("Everything the wallet holds, the fee aside: the program reads the amount as it sends. The wallet stays, and its address receives again.")
                 }
             }
 
             Section {
                 Button {
-                    guard let lamports, let address else { return }
+                    guard let address else { return }
                     Task {
                         reviewing = true
-                        await review(lamports, address)
+                        if sendsAll {
+                            await reviewAll(address)
+                        } else if let lamports {
+                            await review(lamports, address)
+                        }
                         reviewing = false
                     }
                 } label: {
@@ -63,7 +87,7 @@ struct SendView: View {
                         if reviewing { ProgressView() }
                     }
                 }
-                .disabled(lamports == nil || address == nil || reviewing)
+                .disabled(address == nil || (!sendsAll && lamports == nil) || reviewing)
             }
         }
         .navigationTitle("Send")
@@ -82,6 +106,12 @@ struct SendView: View {
 
 #Preview {
     NavigationStack {
-        SendView(recipient: DemoConfig.recipient, amount: DemoConfig.amount) { _, _ in }
+        SendView(recipient: DemoConfig.recipient, amount: DemoConfig.amount, review: { _, _ in }, reviewAll: { _ in })
+    }
+}
+
+#Preview("Send all") {
+    NavigationStack {
+        SendView(recipient: DemoConfig.recipient, sendsAll: true, review: { _, _ in }, reviewAll: { _ in })
     }
 }
