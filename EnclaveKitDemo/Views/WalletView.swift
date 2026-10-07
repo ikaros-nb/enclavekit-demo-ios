@@ -58,7 +58,7 @@ struct WalletView: View {
                 }
             }
 
-            if case let .active(_, recovery?) = status {
+            if case let .active(recovery?) = status {
                 Section {
                     LabeledContent("New key") {
                         Text(recovery.newKey.description)
@@ -198,9 +198,8 @@ struct WalletView: View {
         guard let status else { return "…" }
         return switch status {
         case .notOnChainYet: "Not on-chain yet"
-        case .active(_, recovery: .some): "Recovery in progress"
-        case .active(attested: false, recovery: nil): "Active"
-        case .active(attested: true, recovery: nil): "Active, attested"
+        case .active(recovery: .some): "Recovery in progress"
+        case .active(recovery: nil): "Active"
         case .recovering: "Moving to this iPhone"
         case .keyReplaced: "Moved to another key"
         }

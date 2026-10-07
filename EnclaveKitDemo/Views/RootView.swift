@@ -122,6 +122,6 @@ struct RootView: View {
     }
 
     private var recoveryPending: Bool {
-        if case .active(_, recovery: .some) = model.status { true } else { false }
+        if case .active(recovery: .some) = model.status { true } else { false }
     }
 }
