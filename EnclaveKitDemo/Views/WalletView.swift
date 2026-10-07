@@ -9,11 +9,12 @@ import EnclaveKit
 import SwiftUI
 
 /// The vault: where to send SOL, what it holds, the way to the send and
-/// guardians screens, then what this iPhone does for other wallets and how
-/// it starts over. A recovery comes first: to cancel on the owner's iPhone,
-/// to confirm on the new one. Then a wallet without a guardian says so, on
-/// top. Pull down to refresh.
+/// guardians screens, then what this iPhone does for other wallets, how it
+/// hands its own to another iPhone and how it starts over. A recovery comes
+/// first: to cancel on the owner's iPhone, to confirm on the new one. Then a
+/// wallet without a guardian says so, on top. Pull down to refresh.
 struct WalletView: View {
+    let walletID: Wallet.ID
     let address: PublicKey
     let explorerURL: URL
     let balance: Lamports?
@@ -29,6 +30,7 @@ struct WalletView: View {
     @State private var cancelling = false
     @State private var confirming = false
     @State private var confirmingDeletion = false
+    @State private var showingID = false
 
     var body: some View {
         Form {
@@ -131,12 +133,15 @@ struct WalletView: View {
             Section {
                 LabeledContent("Balance", value: balance?.formatted ?? "…")
                 LabeledContent("Status", value: statusText)
+                if status == .keyReplaced {
+                    Button("Show wallet ID", systemImage: "qrcode") { showingID = true }
+                }
             } footer: {
                 if status == .notOnChainYet {
                     Text("The first action creates the wallet on-chain: its rent is part of that action's fee.")
                 }
                 if status == .keyReplaced {
-                    Text("Another key signs for this wallet now. Delete this iPhone's key to start over.")
+                    Text("Another key signs for this wallet now: the iPhone that holds it scans its ID in Recover a wallet. Delete this iPhone's key to start over.")
                 }
             }
 
@@ -161,6 +166,11 @@ struct WalletView: View {
                         Text(guarding == 0 ? "None" : "\(guarding)")
                     } label: {
                         Label("Guarding", systemImage: "shield.lefthalf.filled")
+                    }
+                }
+                if canMove {
+                    NavigationLink(value: Screen.move) {
+                        Label("Move to another iPhone", systemImage: "iphone.and.arrow.right.outward")
                     }
                 }
                 if canRecover {
@@ -192,6 +202,13 @@ struct WalletView: View {
         } message: {
             Text(deletionWarning)
         }
+        .sheet(isPresented: $showingID) {
+            QRCodeSheet(
+                title: "Wallet ID",
+                text: walletID.description,
+                caption: "The iPhone this wallet moved to scans it in Recover a wallet."
+            )
+        }
     }
 
     private var statusText: String {
@@ -212,6 +229,11 @@ struct WalletView: View {
         case .notOnChainYet, .active: true
         case .recovering, .keyReplaced, nil: false
         }
+    }
+
+    /// Once on-chain: before, the wallet has no key to move.
+    private var canMove: Bool {
+        if case .active = status { true } else { false }
     }
 
     /// A wallet this iPhone signs for, or recovers, stays its own.
@@ -236,6 +258,7 @@ struct WalletView: View {
 #Preview("New") {
     NavigationStack {
         WalletView(
+            walletID: try! Wallet.ID("enclavekit:wallet:\(DemoConfig.recipient)"),
             address: try! PublicKey(base58: DemoConfig.recipient),
             explorerURL: URL(string: "https://explorer.solana.com/?cluster=devnet")!,
             balance: Lamports(sol: "0.05"),

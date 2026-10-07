@@ -53,15 +53,18 @@ import Observation
         await refresh()
     }
 
-    /// Takes on the wallet a guardian proposed this device's key for: the
-    /// SDK checks the proposal on-chain first.
-    func recoverWallet(_ id: Wallet.ID) async {
+    /// Takes on the wallet a guardian proposed this device's key for, or
+    /// another device moved to it, this device's own wallet back included:
+    /// the SDK checks on-chain first. `false` on a failure.
+    func recoverWallet(_ id: Wallet.ID) async -> Bool {
         do {
             show(try await client.recoverWallet(id))
+            await refresh()
+            return true
         } catch {
             failure = error.localizedDescription
+            return false
         }
-        await refresh()
     }
 
     /// The demo's way to lose this iPhone: back to the enroll screen, the
@@ -158,6 +161,13 @@ import Observation
     func reviewCancelRecovery() async {
         guard let wallet else { return }
         await review { try await wallet.prepareCancelRecovery() }
+    }
+
+    /// To the key another device shows, at once: once confirmed, this device
+    /// no longer signs for the wallet.
+    func reviewMove(to newKey: DeviceKey) async {
+        guard let wallet else { return }
+        await review { try await wallet.prepareMove(to: newKey) }
     }
 
     /// As a guardian of `id`: proposes the key its owner's new device shows.

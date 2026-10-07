@@ -15,6 +15,7 @@ enum Screen: Hashable {
     case guarding
     case guardedWallet(Wallet.ID)
     case recover
+    case move
     case close
 }
 
@@ -29,6 +30,7 @@ struct RootView: View {
         NavigationStack(path: $path) {
             if let wallet = model.wallet {
                 WalletView(
+                    walletID: wallet.id,
                     address: wallet.address,
                     explorerURL: wallet.explorerURL,
                     balance: model.balance,
@@ -83,7 +85,20 @@ struct RootView: View {
                             )
                         }
                     case .recover:
-                        RecoverView(deviceKey: wallet.deviceKey, walletID: wallet.id, recover: model.recoverWallet)
+                        RecoverView(deviceKey: wallet.deviceKey) { id in
+                            // Back to the wallet. Its own, moved back here,
+                            // keeps its ID: the `onChange` below misses it.
+                            if await model.recoverWallet(id) { path.removeAll() }
+                        }
+                    case .move:
+                        MoveView(
+                            walletID: wallet.id,
+                            deviceKey: wallet.deviceKey,
+                            guardians: model.guardians,
+                            moved: model.status == .keyReplaced,
+                            recoveryPending: recoveryPending,
+                            review: model.reviewMove
+                        )
                     case .close:
                         CloseView(destination: DemoConfig.recipient, guarding: model.guarded.count, review: model.reviewClose)
                     }
@@ -105,7 +120,8 @@ struct RootView: View {
                     model.dismissConfirmed()
                     // Back to the wallet after a send, to the enroll screen
                     // after a close; the other actions, a guardian's
-                    // proposal included, stay on their screen, refreshed.
+                    // proposal included, stay on their screen, refreshed:
+                    // a move's shows the wallet ID next.
                     path.removeAll { $0 == .send }
                 }
             )

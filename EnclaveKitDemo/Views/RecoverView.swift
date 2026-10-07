@@ -8,13 +8,12 @@
 import EnclaveKit
 import SwiftUI
 
-/// A new iPhone takes over the wallet of a lost one, in two codes: a
-/// guardian scans this iPhone's key and proposes it, then shows the wallet
-/// ID for this iPhone to scan.
+/// A new iPhone takes over a wallet, in two codes: the iPhone that signs for
+/// it, or a guardian if that one is lost, scans this iPhone's key, then
+/// shows the wallet ID for this iPhone to scan. This iPhone's own wallet,
+/// moved away, comes back the same way.
 struct RecoverView: View {
     let deviceKey: DeviceKey
-    /// This device's own: not the one to recover.
-    let walletID: Wallet.ID
     let recover: (Wallet.ID) async -> Void
     @State private var scanning = false
     @State private var scanned: Wallet.ID?
@@ -25,15 +24,15 @@ struct RecoverView: View {
             Section {
                 QRCode(deviceKey.description)
                     .listRowInsets(EdgeInsets())
-                // To compare with the guardian's consent sheet.
+                // To compare with the other iPhone's consent sheet.
                 Text(deviceKey.description)
                     .font(.footnote.monospaced())
                     .typesettingLanguage(.address)
                     .textSelection(.enabled)
             } header: {
-                Text("1. Show this key to a guardian")
+                Text("1. Show this key")
             } footer: {
-                Text("A guardian of the lost wallet scans it, then approves the proposal on their iPhone.")
+                Text("To the iPhone that signs for the wallet: it moves the wallet here at once. If that iPhone is lost, to one of the wallet's guardians: it proposes this key.")
             }
 
             Section {
@@ -50,22 +49,16 @@ struct RecoverView: View {
             } header: {
                 Text("2. Scan the wallet ID")
             } footer: {
-                Text("The guardian's iPhone shows it once the key is proposed. This iPhone then waits for the delay, and confirms.")
+                Text("The other iPhone shows it once done. After a move, this iPhone signs at once; after a guardian's proposal, it waits for the delay, then confirms.")
             }
         }
         .navigationTitle("Recover a wallet")
         // A failure's alert waits for this sheet to be gone.
         .sheet(isPresented: $scanning, onDismiss: recoverScanned) {
-            ScanSheet(title: "Recover a wallet", prompt: "Scan the wallet ID the guardian's iPhone shows.", read: lostWallet) {
+            ScanSheet(title: "Recover a wallet", prompt: "Scan the wallet ID the other iPhone shows.", read: { try Wallet.ID($0) }) {
                 scanned = $0
             }
         }
-    }
-
-    private func lostWallet(_ text: String) throws -> Wallet.ID {
-        let id = try Wallet.ID(text)
-        guard id != walletID else { throw ScanRefusal("This is this iPhone's own wallet: scan the one the guardian shows.") }
-        return id
     }
 
     private func recoverScanned() {
@@ -83,7 +76,6 @@ struct RecoverView: View {
     NavigationStack {
         RecoverView(
             deviceKey: try! DeviceKey("02b215cb41f4972504ed49327411f0784a5378476f42a07d6f4cd21d0261c3e9d0"),
-            walletID: try! Wallet.ID("enclavekit:wallet:\(DemoConfig.recipient)"),
             recover: { _ in }
         )
     }
