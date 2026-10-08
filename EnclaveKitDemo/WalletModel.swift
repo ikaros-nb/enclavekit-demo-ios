@@ -28,38 +28,41 @@ import Observation
     /// a wallet offers them when there are several.
     private(set) var recoverable: [Wallet]?
     /// Why the last read of a screen that waits failed, `nil` once one works
-    /// again: that screen says it, and tries again.
+    /// again: that screen says it, and tries again. Like `failure`, never a
+    /// cancelled task's.
     private(set) var waitFailure: String?
     /// A recovery toward this device being confirmed, on its own or by the
     /// button: one at a time.
     private(set) var confirming = false
     /// The action in the consent sheet, from review to receipt.
     var consent: Consent?
-    /// What went wrong outside the consent sheet, shown in an alert.
+    /// What went wrong outside the consent sheet, shown in an alert. Not
+    /// what a cancelled task met: SwiftUI cancels a screen's task as the
+    /// screen goes, and the recovery's once it is over. Nothing went wrong
+    /// then.
     var failure: String?
 
     init(client: EnclaveKitClient) {
         self.client = client
     }
 
-    /// At launch: this device's wallet if it has one, then its balance.
-    func start() async {
+    /// At launch: this device's wallet if it has one. `RootView` reads the
+    /// rest, as for any wallet shown.
+    func start() {
         do {
             wallet = try client.wallet()
         } catch {
             failure = error.localizedDescription
         }
-        await refresh()
     }
 
     /// Makes the key in the Secure Enclave: no network, no Face ID.
-    func createWallet() async {
+    func createWallet() {
         do {
             show(try client.createWallet())
         } catch {
             failure = error.localizedDescription
         }
-        await refresh()
     }
 
     /// Recover a wallet's wait: the wallets waiting for this device's key,
@@ -80,20 +83,20 @@ import Observation
             waitFailure = nil
             if found.count == 1, let only = found.first { return await recoverWallet(only.id) }
         } catch {
-            waitFailure = error.localizedDescription
+            if !Task.isCancelled { waitFailure = error.localizedDescription }
         }
         return false
     }
 
     /// Takes on one of the wallets waiting for this device's key: the SDK
-    /// checks on-chain first. `false` on a failure.
+    /// checks on-chain first. `false` on a failure. `RootView` reads the
+    /// wallet: Recover a wallet, whose task this runs in, goes with it.
     func recoverWallet(_ id: Wallet.ID) async -> Bool {
         do {
             show(try await client.recoverWallet(id))
-            await refresh()
             return true
         } catch {
-            failure = error.localizedDescription
+            if !Task.isCancelled { failure = error.localizedDescription }
             return false
         }
     }
@@ -129,7 +132,7 @@ import Observation
             guardians = try await wallet.guardians()
             try await readGuarded()
         } catch {
-            failure = error.localizedDescription
+            if !Task.isCancelled { failure = error.localizedDescription }
         }
     }
 
@@ -140,7 +143,7 @@ import Observation
             try await readGuarded()
             waitFailure = nil
         } catch {
-            waitFailure = error.localizedDescription
+            if !Task.isCancelled { waitFailure = error.localizedDescription }
         }
     }
 
@@ -239,11 +242,14 @@ import Observation
         defer { confirming = false }
         do {
             _ = try await wallet.confirmRecoveryWhenOpen()
+            // The relayer paid, the guardians stay: only the status moves.
+            // Read last: `active`, it ends the task this runs in.
+            status = try await wallet.status()
         } catch {
             if Task.isCancelled { return }
             failure = error.localizedDescription
+            await refresh()
         }
-        await refresh()
     }
 
     /// The button, once the delay is over and the confirmation on its own

@@ -108,6 +108,9 @@ struct RootView: View {
         }
         // Another wallet, or none: the screens pushed over the last one go.
         .onChange(of: model.wallet?.id) { path.removeAll() }
+        // Each wallet shown, read here: the screen that switched wallets
+        // goes, and SwiftUI cancels its task with it.
+        .task(id: model.wallet?.id) { await model.refresh() }
         // A guarded wallet forgotten, or that no longer names this iPhone:
         // its screen goes.
         .onChange(of: model.guarded.map(\.id)) { _, ids in
@@ -139,7 +142,7 @@ struct RootView: View {
         } message: {
             Text(model.failure ?? "")
         }
-        .task { await model.start() }
+        .onAppear(perform: model.start)
     }
 
     private var showsFailure: Binding<Bool> {
