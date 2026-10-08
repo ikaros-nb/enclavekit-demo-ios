@@ -9,10 +9,9 @@ import EnclaveKit
 import SwiftUI
 
 /// The owner's side of the guardians: who they are, adding one by scanning
-/// its key, removing one, and the wallet ID each of them keeps. Every
+/// its key, removing one. A guardian finds the wallet on its own. Every
 /// change is one Face ID, the whole list replaced.
 struct GuardiansView: View {
-    let walletID: Wallet.ID
     /// This device's: never its own guardian.
     let deviceKey: DeviceKey
     /// `nil` until read.
@@ -24,7 +23,6 @@ struct GuardiansView: View {
     let review: ([DeviceKey]) async -> Void
     @State private var scanning = false
     @State private var scanned: DeviceKey?
-    @State private var showingID = false
     @State private var reviewing = false
 
     var body: some View {
@@ -67,12 +65,6 @@ struct GuardiansView: View {
             } footer: {
                 Text(footer)
             }
-
-            Section {
-                Button("Show wallet ID", systemImage: "qrcode") { showingID = true }
-            } footer: {
-                Text("Each guardian scans it once, to find this wallet the day you need them.")
-            }
         }
         .navigationTitle("Guardians")
         .refreshable { await refresh() }
@@ -82,17 +74,10 @@ struct GuardiansView: View {
                 scanned = $0
             }
         }
-        .sheet(isPresented: $showingID) {
-            QRCodeSheet(
-                title: "Wallet ID",
-                text: walletID.description,
-                caption: "Each guardian scans it once, to find this wallet the day you need them. It is not an address: never send SOL to it."
-            )
-        }
     }
 
     private var footer: String {
-        let about = "Devices you trust, up to \(Wallet.maxGuardians). If you lose this iPhone, one of them can move the wallet to your new one, after a delay during which you can cancel."
+        let about = "Devices you trust, up to \(Wallet.maxGuardians): scan the key each one shows in its Guarding screen, where this wallet then appears. If you lose this iPhone, one of them can move the wallet to your new one, after a delay during which you can cancel."
         return recoveryPending ? about + " Changing them cancels the recovery in progress." : about
     }
 
@@ -122,7 +107,6 @@ struct GuardiansView: View {
 #Preview {
     NavigationStack {
         GuardiansView(
-            walletID: try! Wallet.ID("enclavekit:wallet:FAnBvyFqTsuE8HTbq9yCDS4fuWyHnvH8CH5Vi5EqKcNQ"),
             deviceKey: try! DeviceKey("02b215cb41f4972504ed49327411f0784a5378476f42a07d6f4cd21d0261c3e9d0"),
             guardians: [try! DeviceKey("02e0552f7c3d1c0b59412b9211256544acbec3694d3240bd91dca7f2d2068e16ca")],
             recoveryPending: false,

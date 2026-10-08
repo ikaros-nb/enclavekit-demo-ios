@@ -8,9 +8,9 @@
 import EnclaveKit
 import SwiftUI
 
-/// The guardian's side: the wallets this device guards, and the two codes
-/// that make it a guardian. The owner scans this device's key; this device
-/// scans the owner's wallet ID.
+/// The guardian's side: the wallets that name this device, read on-chain,
+/// and the one code that makes it a guardian. The owner scans this
+/// device's key; their wallet then shows here on its own.
 struct GuardedWalletsView: View {
     struct Row: Identifiable {
         let id: Wallet.ID
@@ -20,14 +20,13 @@ struct GuardedWalletsView: View {
     }
 
     let rows: [Row]
-    /// This device's own: never one it guards.
-    let walletID: Wallet.ID
     let deviceKey: DeviceKey
+    /// Why the last read failed: the screen tries again all the same.
+    let failure: String?
     let refresh: () async -> Void
-    let keep: (Wallet.ID) async -> Void
+    /// One read of the chain, every few seconds.
+    let look: () async -> Void
     @State private var showingKey = false
-    @State private var scanning = false
-    @State private var scanned: Wallet.ID?
 
     var body: some View {
         Form {
@@ -51,18 +50,23 @@ struct GuardedWalletsView: View {
                     }
                 }
             } footer: {
-                Text("Wallets whose owner named this iPhone as guardian. If they lose their iPhone, you move the wallet to their new one.")
+                if let failure {
+                    Text("\(failure) Trying again.")
+                        .foregroundStyle(.red)
+                } else {
+                    Text("Wallets whose owner named this iPhone as guardian. If they lose their iPhone, you move the wallet to their new one.")
+                }
             }
 
             Section {
                 Button("Show device key", systemImage: "qrcode") { showingKey = true }
-                Button("Guard a wallet", systemImage: "qrcode.viewfinder") { scanning = true }
             } footer: {
-                Text("The owner scans this iPhone's key in their Guardians screen, then shows their wallet ID for you to scan, once.")
+                Text("The owner scans this iPhone's key in their Guardians screen. Once they approve, their wallet shows here.")
             }
         }
         .navigationTitle("Guarding")
         .refreshable { await refresh() }
+        .polling(look)
         .sheet(isPresented: $showingKey) {
             QRCodeSheet(
                 title: "Device key",
@@ -70,26 +74,6 @@ struct GuardedWalletsView: View {
                 caption: "The wallet's owner scans it to name this iPhone as guardian."
             )
         }
-        // A failure's alert waits for this sheet to be gone.
-        .sheet(isPresented: $scanning, onDismiss: keepScanned) {
-            ScanSheet(title: "Guard a wallet", prompt: "Scan the wallet ID its owner's iPhone shows.", read: newWallet) {
-                scanned = $0
-            }
-        }
-    }
-
-    /// A wallet ID, neither this device's own nor one it guards already.
-    private func newWallet(_ text: String) throws -> Wallet.ID {
-        let id = try Wallet.ID(text)
-        guard id != walletID else { throw ScanRefusal("This is this iPhone's own wallet: a guardian is another device.") }
-        guard !rows.contains(where: { $0.id == id }) else { throw ScanRefusal("This iPhone guards this wallet already.") }
-        return id
-    }
-
-    private func keepScanned() {
-        guard let scanned else { return }
-        self.scanned = nil
-        Task { await keep(scanned) }
     }
 }
 
@@ -98,7 +82,7 @@ extension GuardedWallet.Status {
         switch self {
         case .guarding(recovery: nil): "Guarding"
         case .guarding(recovery: .some): "Recovery in progress"
-        case .notGuarding: "Not named as guardian"
+        case .notGuarding: "No longer named as guardian"
         }
     }
 }
@@ -113,10 +97,10 @@ extension GuardedWallet.Status {
                     status: .guarding(recovery: nil)
                 ),
             ],
-            walletID: try! Wallet.ID("enclavekit:wallet:\(DemoConfig.recipient)"),
             deviceKey: try! DeviceKey("02e0552f7c3d1c0b59412b9211256544acbec3694d3240bd91dca7f2d2068e16ca"),
+            failure: nil,
             refresh: {},
-            keep: { _ in }
+            look: {}
         )
     }
 }

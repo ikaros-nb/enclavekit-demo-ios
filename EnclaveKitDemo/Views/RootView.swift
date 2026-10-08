@@ -30,13 +30,13 @@ struct RootView: View {
         NavigationStack(path: $path) {
             if let wallet = model.wallet {
                 WalletView(
-                    walletID: wallet.id,
                     address: wallet.address,
                     explorerURL: wallet.explorerURL,
                     balance: model.balance,
                     status: model.status,
                     guardians: model.guardians?.count,
                     guarding: model.guarded.count,
+                    confirming: model.confirming,
                     refresh: model.refresh,
                     cancelRecovery: model.reviewCancelRecovery,
                     confirmRecovery: model.confirmRecovery,
@@ -53,7 +53,6 @@ struct RootView: View {
                         )
                     case .guardians:
                         GuardiansView(
-                            walletID: wallet.id,
                             deviceKey: wallet.deviceKey,
                             guardians: model.guardians,
                             recoveryPending: recoveryPending,
@@ -63,36 +62,36 @@ struct RootView: View {
                     case .guarding:
                         GuardedWalletsView(
                             rows: model.guarded.map { .init(id: $0.id, address: $0.address, status: model.guardedStatuses[$0.id]) },
-                            walletID: wallet.id,
                             deviceKey: wallet.deviceKey,
+                            failure: model.waitFailure,
                             refresh: model.refresh,
-                            keep: model.guardWallet
+                            look: model.refreshGuarded
                         )
                     case let .guardedWallet(id):
                         if let guarded = model.guarded.first(where: { $0.id == id }) {
                             GuardedWalletView(
-                                id: id,
                                 address: guarded.address,
                                 explorerURL: guarded.explorerURL,
                                 status: model.guardedStatuses[id],
                                 deviceKey: wallet.deviceKey,
                                 refresh: model.refresh,
                                 review: { await model.reviewRecovery(of: id, to: $0) },
-                                forget: {
-                                    path.removeAll { $0 == .guardedWallet(id) }
-                                    model.forgetWallet(id)
-                                }
+                                // Off the list: the `onChange` below goes back.
+                                forget: { model.forgetWallet(id) }
                             )
                         }
                     case .recover:
-                        RecoverView(deviceKey: wallet.deviceKey) { id in
+                        RecoverView(
+                            deviceKey: wallet.deviceKey,
+                            candidates: model.recoverable?.map { .init(id: $0.id, address: $0.address) },
+                            failure: model.waitFailure,
                             // Back to the wallet. Its own, moved back here,
                             // keeps its ID: the `onChange` below misses it.
-                            if await model.recoverWallet(id) { path.removeAll() }
-                        }
+                            look: { if await model.lookForWallets() { path.removeAll() } },
+                            recover: { if await model.recoverWallet($0) { path.removeAll() } }
+                        )
                     case .move:
                         MoveView(
-                            walletID: wallet.id,
                             deviceKey: wallet.deviceKey,
                             guardians: model.guardians,
                             moved: model.status == .keyReplaced,
@@ -109,6 +108,16 @@ struct RootView: View {
         }
         // Another wallet, or none: the screens pushed over the last one go.
         .onChange(of: model.wallet?.id) { path.removeAll() }
+        // A guarded wallet forgotten, or that no longer names this iPhone:
+        // its screen goes.
+        .onChange(of: model.guarded.map(\.id)) { _, ids in
+            path.removeAll { if case let .guardedWallet(id) = $0 { !ids.contains(id) } else { false } }
+        }
+        // Whatever the screen, while a recovery comes to this iPhone. Ends
+        // with it: confirmed, or cancelled by the old iPhone.
+        .task(id: recovering) {
+            if recovering { await model.confirmRecoveryWhenOpen() }
+        }
         .sheet(item: $model.consent) { consent in
             ConsentSheet(
                 summary: consent.request.summary,
@@ -121,7 +130,7 @@ struct RootView: View {
                     // Back to the wallet after a send, to the enroll screen
                     // after a close; the other actions, a guardian's
                     // proposal included, stay on their screen, refreshed:
-                    // a move's shows the wallet ID next.
+                    // a move's says it moved.
                     path.removeAll { $0 == .send }
                 }
             )
@@ -139,5 +148,10 @@ struct RootView: View {
 
     private var recoveryPending: Bool {
         if case .active(recovery: .some) = model.status { true } else { false }
+    }
+
+    /// Toward this iPhone: it confirms on its own.
+    private var recovering: Bool {
+        if case .recovering = model.status { true } else { false }
     }
 }

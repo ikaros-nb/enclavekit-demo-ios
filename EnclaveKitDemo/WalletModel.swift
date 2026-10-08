@@ -20,10 +20,19 @@ import Observation
     private(set) var status: Wallet.Status?
     /// None before the first action.
     private(set) var guardians: [DeviceKey]?
-    /// The wallets this device guards, in the order it took them on.
+    /// The wallets that name this device as guardian, read on-chain.
     private(set) var guarded: [GuardedWallet] = []
     /// Each guarded wallet's, read with the rest.
     private(set) var guardedStatuses: [Wallet.ID: GuardedWallet.Status] = [:]
+    /// The wallets waiting for this device's key, `nil` until read: Recover
+    /// a wallet offers them when there are several.
+    private(set) var recoverable: [Wallet]?
+    /// Why the last read of a screen that waits failed, `nil` once one works
+    /// again: that screen says it, and tries again.
+    private(set) var waitFailure: String?
+    /// A recovery toward this device being confirmed, on its own or by the
+    /// button: one at a time.
+    private(set) var confirming = false
     /// The action in the consent sheet, from review to receipt.
     var consent: Consent?
     /// What went wrong outside the consent sheet, shown in an alert.
@@ -53,9 +62,31 @@ import Observation
         await refresh()
     }
 
-    /// Takes on the wallet a guardian proposed this device's key for, or
-    /// another device moved to it, this device's own wallet back included:
-    /// the SDK checks on-chain first. `false` on a failure.
+    /// Recover a wallet's wait: the wallets waiting for this device's key,
+    /// and the status of the one on screen, read again. A single wallet is
+    /// taken on at once; several wait for the user's choice. `true` once
+    /// there is nothing left to wait for: this device's own wallet came
+    /// back, or it took one on.
+    func lookForWallets() async -> Bool {
+        guard let wallet else { return false }
+        do {
+            status = try await wallet.status()
+            switch status {
+            case .active, .recovering: return true
+            case .notOnChainYet, .keyReplaced, nil: break
+            }
+            let found = try await client.recoverableWallets()
+            recoverable = found
+            waitFailure = nil
+            if found.count == 1, let only = found.first { return await recoverWallet(only.id) }
+        } catch {
+            waitFailure = error.localizedDescription
+        }
+        return false
+    }
+
+    /// Takes on one of the wallets waiting for this device's key: the SDK
+    /// checks on-chain first. `false` on a failure.
     func recoverWallet(_ id: Wallet.ID) async -> Bool {
         do {
             show(try await client.recoverWallet(id))
@@ -86,6 +117,8 @@ import Observation
         guardians = nil
         guarded = []
         guardedStatuses = [:]
+        recoverable = nil
+        waitFailure = nil
     }
 
     func refresh() async {
@@ -94,32 +127,42 @@ import Observation
             balance = try await wallet.balance()
             status = try await wallet.status()
             guardians = try await wallet.guardians()
-            guarded = try client.guardedWallets()
-            for guardedWallet in guarded {
-                guardedStatuses[guardedWallet.id] = try await guardedWallet.status()
-            }
+            try await readGuarded()
         } catch {
             failure = error.localizedDescription
         }
     }
 
-    /// Keeps the wallet, scanned on its owner's device, among those this one
-    /// guards: the Keychain only.
-    func guardWallet(_ id: Wallet.ID) async {
+    /// Guarding's wait: the wallets that name this device, so that one
+    /// shows as soon as its owner adds this device.
+    func refreshGuarded() async {
         do {
-            _ = try client.guardWallet(id)
+            try await readGuarded()
+            waitFailure = nil
         } catch {
-            failure = error.localizedDescription
+            waitFailure = error.localizedDescription
         }
-        await refresh()
     }
 
-    /// Takes the wallet off this device's list: the Keychain only. The
-    /// wallet still names this device until its owner changes its guardians.
+    /// The list and the statuses replaced together: a wallet that no longer
+    /// names this device leaves both.
+    private func readGuarded() async throws {
+        let found = try await client.guardedWallets()
+        var statuses: [Wallet.ID: GuardedWallet.Status] = [:]
+        for guardedWallet in found {
+            statuses[guardedWallet.id] = try await guardedWallet.status()
+        }
+        guarded = found
+        guardedStatuses = statuses
+    }
+
+    /// Takes the wallet off this device's list for good: the Keychain only.
+    /// The wallet still names this device until its owner changes its
+    /// guardians.
     func forgetWallet(_ id: Wallet.ID) {
         do {
             try client.forgetWallet(id)
-            guarded = try client.guardedWallets()
+            guarded.removeAll { $0.id == id }
             guardedStatuses[id] = nil
         } catch {
             failure = error.localizedDescription
@@ -185,10 +228,30 @@ import Observation
         }
     }
 
-    /// On the new device, once the delay is over. Nothing to sign, no Face
-    /// ID: the relayer pays the fee.
-    func confirmRecovery() async {
+    /// On the new device, while the wallet is `recovering`: waits for the
+    /// delay, then confirms. Nothing to sign, no Face ID: the relayer pays
+    /// the fee. A guardian who proposes again pushes the delay back, the
+    /// SDK waits on. The button stays off meanwhile, for a failure only. A
+    /// cancelled wait, the recovery gone, says nothing.
+    func confirmRecoveryWhenOpen() async {
         guard let wallet else { return }
+        confirming = true
+        defer { confirming = false }
+        do {
+            _ = try await wallet.confirmRecoveryWhenOpen()
+        } catch {
+            if Task.isCancelled { return }
+            failure = error.localizedDescription
+        }
+        await refresh()
+    }
+
+    /// The button, once the delay is over and the confirmation on its own
+    /// failed.
+    func confirmRecovery() async {
+        guard let wallet, !confirming else { return }
+        confirming = true
+        defer { confirming = false }
         do {
             _ = try await wallet.confirmRecovery()
         } catch {

@@ -11,10 +11,10 @@ import SwiftUI
 /// The vault: where to send SOL, what it holds, the way to the send and
 /// guardians screens, then what this iPhone does for other wallets, how it
 /// hands its own to another iPhone and how it starts over. A recovery comes
-/// first: to cancel on the owner's iPhone, to confirm on the new one. Then a
-/// wallet without a guardian says so, on top. Pull down to refresh.
+/// first: to cancel on the owner's iPhone, to wait for on the new one, which
+/// confirms on its own. Then a wallet without a guardian says so, on top.
+/// Pull down to refresh.
 struct WalletView: View {
-    let walletID: Wallet.ID
     let address: PublicKey
     let explorerURL: URL
     let balance: Lamports?
@@ -23,14 +23,15 @@ struct WalletView: View {
     let guardians: Int?
     /// How many wallets this iPhone guards.
     let guarding: Int
+    /// A recovery toward this iPhone being confirmed, on its own once the
+    /// delay is over, or by the button after a failure.
+    let confirming: Bool
     let refresh: () async -> Void
     let cancelRecovery: () async -> Void
     let confirmRecovery: () async -> Void
     let deleteDeviceKey: () -> Void
     @State private var cancelling = false
-    @State private var confirming = false
     @State private var confirmingDeletion = false
-    @State private var showingID = false
 
     var body: some View {
         Form {
@@ -39,16 +40,13 @@ struct WalletView: View {
                     RecoveryCountdown(opensAt: recovery.opensAt)
                     TimelineView(.periodic(from: .now, by: 1)) { context in
                         Button {
-                            Task {
-                                confirming = true
-                                await confirmRecovery()
-                                confirming = false
-                            }
+                            Task { await confirmRecovery() }
                         } label: {
                             HStack {
                                 Label("Confirm recovery", systemImage: "checkmark.shield")
                                 Spacer()
-                                if confirming { ProgressView() }
+                                // Sending, past the delay; waiting, before.
+                                if confirming && context.date >= recovery.opensAt { ProgressView() }
                             }
                         }
                         .disabled(context.date < recovery.opensAt || confirming)
@@ -56,7 +54,7 @@ struct WalletView: View {
                 } header: {
                     Label("Recovery to this iPhone", systemImage: "arrow.triangle.2.circlepath")
                 } footer: {
-                    Text("A guardian proposed this iPhone's key. Once the delay is over, confirm: the wallet's key becomes this iPhone's. Nothing to approve, the relayer pays the fee. Until then, the old iPhone can still cancel.")
+                    Text("A guardian proposed this iPhone's key. Once the delay is over, this iPhone confirms on its own: the wallet's key becomes this iPhone's. Nothing to approve, the relayer pays the fee. The button is there if that fails. Until then, the old iPhone can still cancel.")
                 }
             }
 
@@ -133,15 +131,12 @@ struct WalletView: View {
             Section {
                 LabeledContent("Balance", value: balance?.formatted ?? "…")
                 LabeledContent("Status", value: statusText)
-                if status == .keyReplaced {
-                    Button("Show wallet ID", systemImage: "qrcode") { showingID = true }
-                }
             } footer: {
                 if status == .notOnChainYet {
                     Text("The first action creates the wallet on-chain: its rent is part of that action's fee.")
                 }
                 if status == .keyReplaced {
-                    Text("Another key signs for this wallet now: the iPhone that holds it scans its ID in Recover a wallet. Delete this iPhone's key to start over.")
+                    Text("Another key signs for this wallet now. To bring it back, open Recover a wallet; to start over, delete this iPhone's key.")
                 }
             }
 
@@ -202,13 +197,6 @@ struct WalletView: View {
         } message: {
             Text(deletionWarning)
         }
-        .sheet(isPresented: $showingID) {
-            QRCodeSheet(
-                title: "Wallet ID",
-                text: walletID.description,
-                caption: "The iPhone this wallet moved to scans it in Recover a wallet."
-            )
-        }
     }
 
     private var statusText: String {
@@ -258,13 +246,13 @@ struct WalletView: View {
 #Preview("New") {
     NavigationStack {
         WalletView(
-            walletID: try! Wallet.ID("enclavekit:wallet:\(DemoConfig.recipient)"),
             address: try! PublicKey(base58: DemoConfig.recipient),
             explorerURL: URL(string: "https://explorer.solana.com/?cluster=devnet")!,
             balance: Lamports(sol: "0.05"),
             status: .notOnChainYet,
             guardians: 0,
             guarding: 0,
+            confirming: false,
             refresh: {},
             cancelRecovery: {},
             confirmRecovery: {},

@@ -9,10 +9,9 @@ import EnclaveKit
 import SwiftUI
 
 /// One wallet this device guards. The day its owner loses their iPhone:
-/// propose the key their new one shows, then show it the wallet ID. Once
-/// it no longer needs this iPhone, closed for instance: forget it.
+/// propose the key their new one shows, which then finds the wallet on its
+/// own. A wallet this iPhone does not mean to guard: forget it.
 struct GuardedWalletView: View {
-    let id: Wallet.ID
     let address: PublicKey
     let explorerURL: URL
     /// `nil` until read.
@@ -26,7 +25,6 @@ struct GuardedWalletView: View {
     let forget: () -> Void
     @State private var scanning = false
     @State private var scanned: DeviceKey?
-    @State private var showingID = false
     @State private var reviewing = false
     @State private var confirmingForget = false
 
@@ -41,11 +39,10 @@ struct GuardedWalletView: View {
                             .truncationMode(.middle)
                     }
                     RecoveryCountdown(opensAt: recovery.opensAt)
-                    Button("Show wallet ID", systemImage: "qrcode") { showingID = true }
                 } header: {
                     Label("Recovery in progress", systemImage: "arrow.triangle.2.circlepath")
                 } footer: {
-                    Text("The new iPhone scans the wallet ID, then confirms once the delay is over. Until then, the owner's old iPhone can still cancel.")
+                    Text("The new iPhone finds the wallet on its own, then confirms once the delay is over. Until then, the owner's old iPhone can still cancel.")
                 }
             }
 
@@ -66,7 +63,7 @@ struct GuardedWalletView: View {
                 LabeledContent("Status", value: status?.text ?? "…")
             } footer: {
                 if status == .notGuarding {
-                    Text("Its owner has not named this iPhone yet: they scan its key in their Guardians screen. If they no longer do, or closed the wallet, forget it.")
+                    Text("Its owner removed this iPhone, or closed the wallet: it leaves this list at the next read.")
                 }
             }
 
@@ -101,20 +98,13 @@ struct GuardedWalletView: View {
         .confirmationDialog("Forget this wallet?", isPresented: $confirmingForget, titleVisibility: .visible) {
             Button("Forget wallet", role: .destructive, action: forget)
         } message: {
-            Text("It leaves this iPhone's list, nothing changes on-chain: a wallet that names this iPhone keeps it as guardian until its owner changes them.")
+            Text("It leaves this iPhone's list for good, even if its owner names this iPhone again. Nothing changes on-chain: the wallet keeps this iPhone as guardian until its owner changes them.")
         }
         // The consent sheet waits for this one to be gone.
         .sheet(isPresented: $scanning, onDismiss: reviewScanned) {
             ScanSheet(title: "Start recovery", prompt: "Scan the key the owner's new iPhone shows.", read: newKey) {
                 scanned = $0
             }
-        }
-        .sheet(isPresented: $showingID) {
-            QRCodeSheet(
-                title: "Wallet ID",
-                text: id.description,
-                caption: "The owner's new iPhone scans it to take the wallet over."
-            )
         }
     }
 
@@ -138,7 +128,6 @@ struct GuardedWalletView: View {
 #Preview {
     NavigationStack {
         GuardedWalletView(
-            id: try! Wallet.ID("enclavekit:wallet:FAnBvyFqTsuE8HTbq9yCDS4fuWyHnvH8CH5Vi5EqKcNQ"),
             address: try! PublicKey(base58: DemoConfig.recipient),
             explorerURL: URL(string: "https://explorer.solana.com/?cluster=devnet")!,
             status: .guarding(recovery: nil),
