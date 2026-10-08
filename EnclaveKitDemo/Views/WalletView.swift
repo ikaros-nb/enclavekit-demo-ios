@@ -136,7 +136,7 @@ struct WalletView: View {
                     Text("The first action creates the wallet on-chain: its rent is part of that action's fee.")
                 }
                 if status == .keyReplaced {
-                    Text("Another key signs for this wallet now. To bring it back, open Recover a wallet; to start over, delete this iPhone's key.")
+                    Text("This iPhone no longer signs for this wallet: it moved to another key, or was closed since. To take a wallet on, open Recover a wallet; to start over, delete this iPhone's key.")
                 }
             }
 
